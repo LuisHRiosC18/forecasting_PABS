@@ -108,12 +108,36 @@ def display_growth_indicator(hist_df, forecast_df, model_name):
 
 def create_forecast_plot(df_hist, forecasts_df, unique_id, model_name):
     fig = go.Figure()
+    
+    # Prepara los datos históricos y de pronóstico
     hist_data = df_hist[df_hist['unique_id'] == unique_id]
     forecast_data = forecasts_df[forecasts_df['unique_id'] == unique_id]
+    
+    # 1. Graficar la serie histórica (siempre se hace)
     fig.add_trace(go.Scatter(x=hist_data['ds'], y=hist_data['y'], mode='lines', name='Histórico', line=dict(color='#1f77b4')))
-    fig.add_trace(go.Scatter(x=forecast_data['ds'], y=forecast_data[model_name], mode='lines', name='Predicción', line=dict(color='#ff7f0e', dash='dash')))
-    fig.add_trace(go.Scatter(x=forecast_data['ds'], y=forecast_data[f'{model_name}-hi-95'], mode='lines', line=dict(width=0), showlegend=False))
-    fig.add_trace(go.Scatter(x=forecast_data['ds'], y=forecast_data[f'{model_name}-lo-95'], fill='tonexty', fillcolor='rgba(255, 127, 14, 0.2)', mode='lines', line=dict(width=0), name='IC 95%'))
+    
+    # 2. Graficar la predicción puntual (siempre se hace)
+    if model_name in forecast_data.columns:
+        fig.add_trace(go.Scatter(x=forecast_data['ds'], y=forecast_data[model_name], mode='lines', name='Predicción', line=dict(color='#ff7f0e', dash='dash')))
+
+    # 3. VERIFICAR y graficar el intervalo de confianza (solo si existe)
+    hi_col = f'{model_name}-hi-95'
+    lo_col = f'{model_name}-lo-95'
+    
+    if hi_col in forecast_data.columns and lo_col in forecast_data.columns:
+        fig.add_trace(go.Scatter(
+            x=forecast_data['ds'], 
+            y=forecast_data[hi_col], 
+            mode='lines', line=dict(width=0), showlegend=False
+        ))
+        fig.add_trace(go.Scatter(
+            x=forecast_data['ds'], 
+            y=forecast_data[lo_col], 
+            fill='tonexty', fillcolor='rgba(255, 127, 14, 0.2)', 
+            mode='lines', line=dict(width=0), name='IC 95%'
+        ))
+
+    # Actualizar el layout
     fig.update_layout(
         title=f'Pronóstico para "{unique_id}" con {model_name}',
         xaxis_title='Fecha', yaxis_title='Ingresos', hovermode='x unified', height=450,
