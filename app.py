@@ -10,7 +10,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # --- Configuración de Página ---
-st.set_page_config(page_title="Predictor de Series de Tiempo", page_icon="📈", layout="wide")
+st.set_page_config(page_title="Predictor de Ingresos", page_icon="📈", layout="wide")
 
 # --- Funciones (sin cambios en generate_sample_data y prepare_data) ---
 def generate_sample_data():
