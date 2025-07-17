@@ -214,12 +214,15 @@ def main():
             col1, col2 = st.columns(2)
             
             with col1:
-                horizon = st.slider(
-                    "Horizonte de predicción (días)",
-                    min_value=1,
-                    max_value=365,
-                    value=30
-                )
+                horizon = st.number_input('Horizonte de predicción (semanas)', 
+                                          min_value=1, value=12, 
+                                          step=1)
+                #horizon = st.slider(
+                    #"Horizonte de predicción (días)",
+                    #min_value=1,
+                    #max_value=365,
+                    #value=30
+                #)
             
             with col2:
                 models_available = ['AutoARIMA', 'AutoETS', 'SeasonalNaive']
