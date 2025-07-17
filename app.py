@@ -107,7 +107,7 @@ with st.sidebar:
     # AÑADIDA OPCIÓN DE GITHUB
     data_option = st.radio(
         "Fuente de datos:",
-        ["Cargar desde GitHub","Cargar archivo CSV", "Usar datos de ejemplo"],
+        ["Ecobro 2025","Cargar archivo CSV", "Usar datos de ejemplo"],
         key="data_source", horizontal=True
     )
     
@@ -119,7 +119,7 @@ with st.sidebar:
         if uploaded_file:
             df = pd.read_csv(uploaded_file)
     # LÓGICA PARA CARGAR DESDE GITHUB
-    elif data_option == "Cargar desde GitHub":
+    elif data_option == "Ecobro 2025":
         github_url = st.text_input(
             "URL del archivo CSV 'raw' en GitHub",
             "https://raw.githubusercontent.com/LuisHRiosC18/forecasting_PABS/refs/heads/main/data_forecast/data_semanal.csv" # URL de ejemplo
