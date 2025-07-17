@@ -165,10 +165,10 @@ if 'df_prepared' not in st.session_state:
     st.session_state.df_prepared = None
 
 with st.sidebar:
-    st.header("⚙️ 1. Cargar Datos")
+    st.header("⚙️ 1. Datos")
     data_option = st.radio(
         "Fuente de datos:",
-        ["Usar datos de ejemplo", "Cargar archivo CSV", "Cargar desde GitHub"],
+        ["Ecobro"],
         key="data_source", horizontal=True
     )
     df = None
@@ -192,11 +192,11 @@ with st.sidebar:
             st.success("Datos cargados y listos.")
     
     if st.session_state.df_prepared is not None:
-        st.header("🔮 2. Configurar Predicción")
-        horizon = st.slider('Horizonte de predicción (semanas)', min_value=1, max_value=52, value=12)
+        st.header("🔮 Configurar Predicción")
+        horizon = st.slider('Horizonte de predicción (semanas)', min_value=1, max_value=52, value=6)
         freq, season_length = 'W', 52
         models_available = ['AutoARIMA', 'AutoETS', 'SeasonalNaive', 'Theta', 'NHITS']
-        default_models = ['AutoARIMA', 'NHITS']
+        default_models = ['AutoARIMA', 'SeasonalNaive', 'AutoETS','Theta']
         models_selected = st.multiselect("Seleccionar modelos:", models_available, default=default_models)
         if st.button("🚀 Generar Predicciones", type="primary", use_container_width=True):
             if not models_selected:
@@ -210,7 +210,7 @@ with st.sidebar:
 
 if st.session_state.df_prepared is not None:
     if st.session_state.forecast_df is not None:
-        st.header("📊 3. Visualizar Resultados")
+        st.header("📊 Visualizar Resultados")
         forecasts = st.session_state.forecast_df
         df_prepared = st.session_state.df_prepared
         unique_ids = df_prepared['unique_id'].unique()
