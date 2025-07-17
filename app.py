@@ -14,7 +14,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # --- Configuración de Página ---
-st.set_page_config(page_title="Dashboard de Pronósticos", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="Pronósticos PABS", page_icon="🚀", layout="wide")
 
 # --- Funciones de Carga y Preparación ---
 def generate_sample_data():
@@ -156,8 +156,8 @@ def display_aggregate_summary(forecast_df, models_selected):
     col3.metric("⬆️ Máximo Esperado", f"${max_pred:,.2f}", help="La predicción más optimista.")
 
 # --- APLICACIÓN PRINCIPAL ---
-st.title("🚀 Dashboard de Pronósticos de Ingresos")
-st.markdown("Carga tus datos, selecciona modelos y visualiza el futuro de tus series de tiempo.")
+st.title("🚀 Pronósticos de Ingresos")
+st.markdown("Carga tus datos, selecciona modelos y visualiza el futuro 🔥🔥🔥🔥🔥🔥.")
 
 if 'forecast_df' not in st.session_state:
     st.session_state.forecast_df = None
