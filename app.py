@@ -10,18 +10,26 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # --- Configuración de Página ---
-st.set_page_config(page_title="Predictor de Ingresos", page_icon="📈", layout="wide")
+st.set_page_config(page_title="Dashboard de Pronósticos", page_icon="🚀", layout="wide")
 
-# --- Funciones (sin cambios en generate_sample_data y prepare_data) ---
+# --- Funciones de Carga y Preparación ---
 def generate_sample_data():
-    dates = pd.date_range(start='2020-01-01', end='2023-12-31', freq='D')
+    dates = pd.date_range(start='2022-01-01', end='2024-12-31', freq='W-MON') # Semanal
     np.random.seed(42)
-    trend = np.linspace(100, 200, len(dates))
-    seasonal = 10 * np.sin(2 * np.pi * np.arange(len(dates)) / 365.25)
-    noise = np.random.normal(0, 5, len(dates))
+    trend = np.linspace(100, 250, len(dates))
+    seasonal = 20 * np.sin(2 * np.pi * np.arange(len(dates)) / 52)
+    noise = np.random.normal(0, 10, len(dates))
     values = trend + seasonal + noise
-    df = pd.DataFrame({'ds': dates, 'y': values, 'unique_id': 'serie_ejemplo'})
+    df = pd.DataFrame({'ds': dates, 'y': values, 'unique_id': 'ingresos_semanales'})
     return df
+
+# NUEVA FUNCIÓN para cargar desde GitHub
+def load_github_data(url):
+    try:
+        return pd.read_csv(url)
+    except Exception as e:
+        st.error(f"No se pudo cargar el archivo desde la URL: {e}")
+        return None
 
 def prepare_data(df):
     if 'ds' not in df.columns or 'y' not in df.columns:
@@ -30,137 +38,156 @@ def prepare_data(df):
     df['ds'] = pd.to_datetime(df['ds'])
     if 'unique_id' not in df.columns:
         df['unique_id'] = 'serie_1'
-    return df[['unique_id', 'ds', 'y']].sort_values(['unique_id', 'ds'])
+    return df[['unique_id', 'ds', 'y']].sort_values(['unique_id', 'ds']).reset_index(drop=True)
 
-# --- FUNCIONES MEJORADAS ---
-@st.cache_data # Usar cache para evitar recalcular con los mismos inputs
+# --- Funciones de Modelo y Visualización ---
+@st.cache_data
 def run_forecast(df, models_selected, horizon, freq, season_length):
-    """Función de predicción optimizada y cacheada."""
     model_map = {
-        'AutoARIMA': AutoARIMA(),
-        'AutoETS': AutoETS(),
+        'AutoARIMA': AutoARIMA(), 'AutoETS': AutoETS(),
         'SeasonalNaive': SeasonalNaive(season_length=season_length)
     }
     models = [model_map[model] for model in models_selected]
     sf = StatsForecast(models=models, freq=freq, n_jobs=-1)
-    forecasts = sf.forecast(df=df, h=horizon, level=[80, 95])
-    return forecasts
+    forecasts = sf.forecast(df=df, h=horizon, level=[95])
+    return forecasts.reset_index()
+
+# NUEVA FUNCIÓN para el indicador KPI
+def display_growth_indicator(hist_df, forecast_df, model_name):
+    """Calcula y muestra un KPI de crecimiento/decrecimiento para la siguiente semana."""
+    last_known_value = hist_df['y'].iloc[-1]
+    first_forecast_value = forecast_df[model_name].iloc[0]
+    
+    delta = first_forecast_value - last_known_value
+    delta_percent = (delta / last_known_value) * 100
+    
+    st.metric(
+        label=f"Predicción Próxima Semana ({model_name})",
+        value=f"${first_forecast_value:,.2f}",
+        delta=f"{delta_percent:.2f}% vs. semana anterior",
+        help=f"El último valor real fue ${last_known_value:,.2f}. El modelo predice un cambio de ${delta:,.2f}."
+    )
 
 def create_forecast_plot(df_hist, forecasts_df, unique_id, model_name):
-    """Función de graficado simplificada."""
     fig = go.Figure()
     hist_data = df_hist[df_hist['unique_id'] == unique_id]
     forecast_data = forecasts_df[forecasts_df['unique_id'] == unique_id]
 
-    fig.add_trace(go.Scatter(x=hist_data['ds'], y=hist_data['y'], mode='lines', name='Datos Históricos', line=dict(color='#1f77b4')))
-    fig.add_trace(go.Scatter(x=forecast_data['ds'], y=forecast_data[model_name], mode='lines', name=f'Predicción ({model_name})', line=dict(color='#ff7f0e', dash='dash')))
+    fig.add_trace(go.Scatter(x=hist_data['ds'], y=hist_data['y'], mode='lines', name='Histórico', line=dict(color='#1f77b4')))
+    fig.add_trace(go.Scatter(x=forecast_data['ds'], y=forecast_data[model_name], mode='lines', name='Predicción', line=dict(color='#ff7f0e', dash='dash')))
     
-    # Intervalos de confianza
     fig.add_trace(go.Scatter(
         x=forecast_data['ds'], y=forecast_data[f'{model_name}-hi-95'],
-        mode='lines', line=dict(width=0), showlegend=False, hoverinfo='skip'
+        mode='lines', line=dict(width=0), showlegend=False,
     ))
     fig.add_trace(go.Scatter(
         x=forecast_data['ds'], y=forecast_data[f'{model_name}-lo-95'],
         fill='tonexty', fillcolor='rgba(255, 127, 14, 0.2)',
-        mode='lines', line=dict(width=0), name='IC 95%', hoverinfo='skip'
+        mode='lines', line=dict(width=0), name='IC 95%',
     ))
 
     fig.update_layout(
-        title=f'Predicción para "{unique_id}" con {model_name}',
-        xaxis_title='Fecha', yaxis_title='Valor', hovermode='x unified', height=500,
+        title=f'Pronóstico para "{unique_id}" con {model_name}',
+        xaxis_title='Fecha', yaxis_title='Ingresos', hovermode='x unified', height=450,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
     return fig
 
 # --- APLICACIÓN PRINCIPAL ---
-st.title("📈 Predictor de Ingresos")
-st.markdown("Una aplicación para generar y visualizar predicciones de los ingresos semanales de PABS.")
+st.title("🚀 Dashboard de Pronósticos de Ingresos")
+st.markdown("Carga tus datos, selecciona modelos y visualiza el futuro de tus series de tiempo.")
 
-# Inicializar Session State
 if 'forecast_df' not in st.session_state:
     st.session_state.forecast_df = None
 if 'df_prepared' not in st.session_state:
     st.session_state.df_prepared = None
 
-# --- SIDEBAR DE CONFIGURACIÓN ---
 with st.sidebar:
     st.header("⚙️ 1. Cargar Datos")
-    data_option = st.radio("Fuente de datos:", ["Usar datos de ejemplo", "Cargar archivo CSV"], key="data_source")
+    # AÑADIDA OPCIÓN DE GITHUB
+    data_option = st.radio(
+        "Fuente de datos:",
+        ["Usar datos de ejemplo", "Cargar archivo CSV", "Cargar desde GitHub"],
+        key="data_source", horizontal=True
+    )
     
     df = None
     if data_option == "Usar datos de ejemplo":
         df = generate_sample_data()
-    else:
+    elif data_option == "Cargar archivo CSV":
         uploaded_file = st.file_uploader("Cargar CSV", type=['csv'])
         if uploaded_file:
             df = pd.read_csv(uploaded_file)
+    # LÓGICA PARA CARGAR DESDE GITHUB
+    elif data_option == "Cargar desde GitHub":
+        github_url = st.text_input(
+            "URL del archivo CSV 'raw' en GitHub",
+            "https://raw.githubusercontent.com/Nixtla/transfer-learning-time-series/main/data/air-passengers.csv" # URL de ejemplo
+        )
+        if github_url:
+            df = load_github_data(github_url)
     
     if df is not None:
         st.session_state.df_prepared = prepare_data(df)
-        st.success("Datos listos para procesar.")
-
-# --- CUERPO PRINCIPAL ---
-if st.session_state.df_prepared is not None:
-    df_prepared = st.session_state.df_prepared
+        if st.session_state.df_prepared is not None:
+            st.success("Datos cargados y listos.")
     
-    st.header("📊 Resumen de Datos")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Observaciones", len(df_prepared))
-    col2.metric("Fecha Inicial", df_prepared['ds'].min().strftime('%Y-%m-%d'))
-    col3.metric("Fecha Final", df_prepared['ds'].max().strftime('%Y-%m-%d'))
-    with st.expander("Ver vista previa de los datos"):
-        st.dataframe(df_prepared.head())
-
-    st.header("🔮 2. Configurar Predicción")
-    
-    # Configuración en columnas
-    config_col1, config_col2, config_col3 = st.columns(3)
-    with config_col1:
-        horizon = st.number_input('Horizonte de predicción', min_value=1, value=30, step=1)
-    with config_col2:
-        freq_map = {'Diaria': 'D', 'Semanal': 'W', 'Mensual': 'M'}
-        freq_key = st.selectbox("Frecuencia de datos:", list(freq_map.keys()), index=0)
-        freq = freq_map[freq_key]
-    with config_col3:
-        season_map = {'D': 365, 'W': 52, 'M': 12}
-        season_length = season_map.get(freq, 1)
-        st.info(f"Estacionalidad inferida: `{season_length}`")
-
-    models_available = ['AutoARIMA', 'AutoETS', 'SeasonalNaive']
-    models_selected = st.multiselect("Seleccionar modelos a comparar:", models_available, default=['AutoARIMA', 'SeasonalNaive'])
-
-    if st.button("🚀 Generar Predicciones", type="primary", use_container_width=True):
-        if not models_selected:
-            st.error("Por favor, selecciona al menos un modelo.")
-        else:
-            with st.spinner("Entrenando modelos y generando predicciones... ¡Esto puede tardar un momento!"):
-                st.session_state.forecast_df = run_forecast(df_prepared, models_selected, horizon, freq, season_length)
-                st.success("¡Predicciones generadas y guardadas en la sesión!")
-
-    # --- 3. MOSTRAR RESULTADOS (SI EXISTEN EN SESSION STATE) ---
-    if st.session_state.forecast_df is not None:
-        st.header("📈 3. Visualizar Resultados")
-        forecasts = st.session_state.forecast_df
+    # Mover configuración de predicción a la sidebar para una UI más limpia
+    if st.session_state.df_prepared is not None:
+        st.header("🔮 2. Configurar Predicción")
+        horizon = st.slider('Horizonte de predicción (semanas)', min_value=1, max_value=52, value=12)
+        freq = 'W' # Frecuencia semanal por defecto para este caso de negocio
+        season_length = 52
         
+        models_available = ['AutoARIMA', 'AutoETS', 'SeasonalNaive']
+        models_selected = st.multiselect("Seleccionar modelos:", models_available, default=['AutoARIMA', 'SeasonalNaive'])
+
+        if st.button("🚀 Generar Predicciones", type="primary", use_container_width=True):
+            if not models_selected:
+                st.error("Por favor, selecciona al menos un modelo.")
+            else:
+                with st.spinner("Entrenando modelos y generando predicciones..."):
+                    st.session_state.forecast_df = run_forecast(
+                        st.session_state.df_prepared, models_selected, horizon, freq, season_length
+                    )
+                    st.success("¡Pronósticos listos!")
+
+
+if st.session_state.df_prepared is not None:
+    if st.session_state.forecast_df is not None:
+        st.header("📊 3. Visualizar Resultados")
+        forecasts = st.session_state.forecast_df
+        df_prepared = st.session_state.df_prepared
+
         unique_ids = df_prepared['unique_id'].unique()
         selected_id = unique_ids[0]
         if len(unique_ids) > 1:
             selected_id = st.selectbox("Selecciona una serie para visualizar:", unique_ids)
         
         tabs = st.tabs([f"📊 {model}" for model in models_selected])
+        
         for i, model_name in enumerate(models_selected):
             with tabs[i]:
-                fig = create_forecast_plot(df_prepared, forecasts, selected_id, model_name)
-                st.plotly_chart(fig, use_container_width=True)
+                # SE LLAMA A LA NUEVA FUNCIÓN KPI AQUÍ
+                kpi_col, chart_col = st.columns([1, 3])
+                with kpi_col:
+                    display_growth_indicator(
+                        df_prepared[df_prepared['unique_id'] == selected_id],
+                        forecasts[forecasts['unique_id'] == selected_id],
+                        model_name
+                    )
+
+                with chart_col:
+                    fig = create_forecast_plot(df_prepared, forecasts, selected_id, model_name)
+                    st.plotly_chart(fig, use_container_width=True)
 
         st.subheader("📥 Descargar Resultados")
         csv = forecasts.to_csv(index=False).encode('utf-8')
         st.download_button(
-            label="Descargar predicciones como CSV",
-            data=csv,
-            file_name=f"predicciones_{selected_id}_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv",
+            label="Descargar predicciones como CSV", data=csv,
+            file_name=f"predicciones_{selected_id}.csv", mime="text/csv"
         )
+    else:
+        st.info("Configura y genera una predicción desde la barra lateral para ver los resultados.")
 else:
-    st.info("Carga datos desde la barra lateral para comenzar.")
+    st.info("Bienvenido. Carga tus datos desde la barra lateral para comenzar.")
