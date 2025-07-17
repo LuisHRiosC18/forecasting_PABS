@@ -99,7 +99,7 @@ def create_forecast(df, horizon, models_selected):
         
         # Generar predicciones e intervalos de confianza en una sola llamada
         # Esto es mucho más eficiente
-        forecasts = sf.forecast(h=horizon, level=[80, 95])
+        forecasts = sf.forecast(df, h=horizon, level=[80, 95])
         
         return forecasts, sf
         
