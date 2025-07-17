@@ -10,7 +10,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # --- Configuración de Página ---
-st.set_page_config(page_title="Dashboard de Pronósticos", page_icon="🚀", layout="wide")
+st.set_page_config(page_title=Pronósticos-PABS", page_icon="🚀", layout="wide")
 
 # --- Funciones de Carga y Preparación ---
 def generate_sample_data():
