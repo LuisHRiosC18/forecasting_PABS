@@ -80,7 +80,7 @@ def create_forecast(df, horizon, models_selected):
         # Crear el objeto StatsForecast
         sf = StatsForecast(
             models=models,
-            freq='D',
+            freq='W',
             n_jobs=-1
         )
         
