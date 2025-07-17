@@ -74,8 +74,8 @@ def create_forecast_plot(df_hist, forecasts_df, unique_id, model_name):
     return fig
 
 # --- APLICACIÓN PRINCIPAL ---
-st.title("📈 Predictor de Series de Tiempo con Nixtla")
-st.markdown("Una aplicación para generar y visualizar predicciones usando `StatsForecast` de forma eficiente.")
+st.title("📈 Predictor de Ingresos")
+st.markdown("Una aplicación para generar y visualizar predicciones de los ingresos semanales de PABS.")
 
 # Inicializar Session State
 if 'forecast_df' not in st.session_state:
