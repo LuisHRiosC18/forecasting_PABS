@@ -66,13 +66,26 @@ def prepare_data(df):
 
 # Función para crear el modelo y predecir
 def create_forecast(df, horizon, models_selected):
-    """Crea predicciones usando StatsForecast"""
+    """
+    Crea predicciones e intervalos de confianza usando StatsForecast en una sola llamada.
+    """
     try:
+        # Asegúrate de que el horizonte sea un entero
+        if not isinstance(horizon, int):
+            # Intenta convertirlo o tomar el primer elemento si es una lista/tupla
+            # Esto es una salvaguarda, lo ideal es corregir el widget de Streamlit
+            try:
+                horizon = int(horizon[0]) if isinstance(horizon, (list, tuple)) else int(horizon)
+                st.warning(f"El horizonte no era un entero. Se ha convertido a: {horizon}")
+            except (ValueError, TypeError):
+                st.error(f"El valor del horizonte ('{horizon}') no es válido. Debe ser un número entero.")
+                return None, None
+
         # Mapeo de modelos
         model_map = {
             'AutoARIMA': AutoARIMA(),
             'AutoETS': AutoETS(),
-            'SeasonalNaive': SeasonalNaive(season_length=365)
+            'SeasonalNaive': SeasonalNaive(season_length=52) # Ojo: freq='W', season_length=52 podría ser más apropiado
         }
         
         models = [model_map[model] for model in models_selected]
@@ -80,21 +93,19 @@ def create_forecast(df, horizon, models_selected):
         # Crear el objeto StatsForecast
         sf = StatsForecast(
             models=models,
-            freq='W',
+            freq='W',       # Frecuencia Semanal
             n_jobs=-1
         )
         
-        # Generar predicciones
-        forecasts = sf.forecast(df, h=horizon)
+        # Generar predicciones e intervalos de confianza en una sola llamada
+        # Esto es mucho más eficiente
+        forecasts = sf.forecast(h=horizon, level=[80, 95])
         
-        # Generar intervalos de confianza
-        forecasts_ci = sf.forecast(df, h=horizon, level=[80, 95])
-        
-        return forecasts, forecasts_ci, sf
+        return forecasts, sf
         
     except Exception as e:
         st.error(f"Error al generar predicciones: {str(e)}")
-        return None, None, None
+        return None, None
 
 # Función para crear gráfica
 def create_forecast_plot(df, forecasts, forecasts_ci, unique_id, model_name):
