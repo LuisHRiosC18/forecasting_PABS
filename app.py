@@ -240,7 +240,7 @@ if st.session_state.df_prepared is not None:
         
         st.divider()
         
-        # --- BLOQUE CORREGIDO ---
+        # --- BLOQUE CORREGIDO --- <- Gemini salvandome again
         # Estas líneas ahora tienen la indentación correcta, alineadas con los dividers y el header.
         st.subheader("📥 Descargar Resultados")
         csv = forecasts.to_csv(index=False).encode('utf-8')
