@@ -2,313 +2,165 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import plotly.express as px
 from statsforecast import StatsForecast
 from statsforecast.models import AutoARIMA, AutoETS, SeasonalNaive
-from datetime import datetime, timedelta
+from datetime import datetime
 import warnings
+
 warnings.filterwarnings('ignore')
 
-# Configuración de la página
-st.set_page_config(
-    page_title="Predictor de Series de Tiempo",
-    page_icon="📈",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# --- Configuración de Página ---
+st.set_page_config(page_title="Predictor de Series de Tiempo", page_icon="📈", layout="wide")
 
-# Título principal
-st.title("📈 Predictor de Series de Tiempo con Nixtla")
-st.markdown("Aplicación para generar y visualizar predicciones usando StatsForecast")
-
-# Sidebar para configuración
-st.sidebar.header("⚙️ Configuración")
-
-# Función para generar datos de ejemplo
+# --- Funciones (sin cambios en generate_sample_data y prepare_data) ---
 def generate_sample_data():
-    """Genera datos de ejemplo para demostración"""
     dates = pd.date_range(start='2020-01-01', end='2023-12-31', freq='D')
     np.random.seed(42)
-    
-    # Crear tendencia y estacionalidad
     trend = np.linspace(100, 200, len(dates))
     seasonal = 10 * np.sin(2 * np.pi * np.arange(len(dates)) / 365.25)
     noise = np.random.normal(0, 5, len(dates))
-    
     values = trend + seasonal + noise
-    
-    df = pd.DataFrame({
-        'ds': dates,
-        'y': values,
-        'unique_id': 'serie_ejemplo'
-    })
-    
+    df = pd.DataFrame({'ds': dates, 'y': values, 'unique_id': 'serie_ejemplo'})
     return df
 
-# Función para preparar datos
 def prepare_data(df):
-    """Prepara los datos para el formato requerido por StatsForecast"""
-    if 'ds' not in df.columns:
-        st.error("El dataset debe tener una columna 'ds' con fechas")
+    if 'ds' not in df.columns or 'y' not in df.columns:
+        st.error("El dataset debe tener columnas 'ds' (fechas) y 'y' (valores).")
         return None
-    if 'y' not in df.columns:
-        st.error("El dataset debe tener una columna 'y' con valores")
-        return None
-    
-    # Asegurar que 'ds' sea datetime
     df['ds'] = pd.to_datetime(df['ds'])
-    
-    # Si no hay unique_id, crear uno
     if 'unique_id' not in df.columns:
         df['unique_id'] = 'serie_1'
-    
     return df[['unique_id', 'ds', 'y']].sort_values(['unique_id', 'ds'])
 
-# Función para crear el modelo y predecir
-def create_forecast(df, horizon, models_selected):
-    """
-    Crea predicciones e intervalos de confianza usando StatsForecast en una sola llamada.
-    """
-    try:
-        # Asegúrate de que el horizonte sea un entero
-        if not isinstance(horizon, int):
-            # Intenta convertirlo o tomar el primer elemento si es una lista/tupla
-            # Esto es una salvaguarda, lo ideal es corregir el widget de Streamlit
-            try:
-                horizon = int(horizon[0]) if isinstance(horizon, (list, tuple)) else int(horizon)
-                st.warning(f"El horizonte no era un entero. Se ha convertido a: {horizon}")
-            except (ValueError, TypeError):
-                st.error(f"El valor del horizonte ('{horizon}') no es válido. Debe ser un número entero.")
-                return None, None
+# --- FUNCIONES MEJORADAS ---
+@st.cache_data # Usar cache para evitar recalcular con los mismos inputs
+def run_forecast(df, models_selected, horizon, freq, season_length):
+    """Función de predicción optimizada y cacheada."""
+    model_map = {
+        'AutoARIMA': AutoARIMA(),
+        'AutoETS': AutoETS(),
+        'SeasonalNaive': SeasonalNaive(season_length=season_length)
+    }
+    models = [model_map[model] for model in models_selected]
+    sf = StatsForecast(models=models, freq=freq, n_jobs=-1)
+    forecasts = sf.forecast(df=df, h=horizon, level=[80, 95])
+    return forecasts
 
-        # Mapeo de modelos
-        model_map = {
-            'AutoARIMA': AutoARIMA(),
-            'AutoETS': AutoETS(),
-            'SeasonalNaive': SeasonalNaive(season_length=52) # Ojo: freq='W', season_length=52 podría ser más apropiado
-        }
-        
-        models = [model_map[model] for model in models_selected]
-        
-        # Crear el objeto StatsForecast
-        sf = StatsForecast(
-            models=models,
-            freq='W',       # Frecuencia Semanal
-            n_jobs=-1
-        )
-        
-        # Generar predicciones e intervalos de confianza en una sola llamada
-        # Esto es mucho más eficiente
-        forecasts = sf.forecast(df, h=horizon, level=[80, 95])
-        
-        return forecasts, sf
-        
-    except Exception as e:
-        st.error(f"Error al generar predicciones: {str(e)}")
-        return None, None
-
-# Función para crear gráfica
-def create_forecast_plot(df, forecasts, forecasts_ci, unique_id, model_name):
-    """Crea gráfica interactiva de la predicción"""
-    
-    # Filtrar datos para la serie específica
-    df_filtered = df[df['unique_id'] == unique_id].copy()
-    forecasts_filtered = forecasts[forecasts['unique_id'] == unique_id].copy()
-    forecasts_ci_filtered = forecasts_ci[forecasts_ci['unique_id'] == unique_id].copy()
-    
-    # Crear figura
+def create_forecast_plot(df_hist, forecasts_df, unique_id, model_name):
+    """Función de graficado simplificada."""
     fig = go.Figure()
+    hist_data = df_hist[df_hist['unique_id'] == unique_id]
+    forecast_data = forecasts_df[forecasts_df['unique_id'] == unique_id]
+
+    fig.add_trace(go.Scatter(x=hist_data['ds'], y=hist_data['y'], mode='lines', name='Datos Históricos', line=dict(color='#1f77b4')))
+    fig.add_trace(go.Scatter(x=forecast_data['ds'], y=forecast_data[model_name], mode='lines', name=f'Predicción ({model_name})', line=dict(color='#ff7f0e', dash='dash')))
     
-    # Datos históricos
+    # Intervalos de confianza
     fig.add_trace(go.Scatter(
-        x=df_filtered['ds'],
-        y=df_filtered['y'],
-        mode='lines',
-        name='Datos Históricos',
-        line=dict(color='blue')
+        x=forecast_data['ds'], y=forecast_data[f'{model_name}-hi-95'],
+        mode='lines', line=dict(width=0), showlegend=False, hoverinfo='skip'
     ))
-    
-    # Predicciones
-    if model_name in forecasts_filtered.columns:
-        fig.add_trace(go.Scatter(
-            x=forecasts_filtered['ds'],
-            y=forecasts_filtered[model_name],
-            mode='lines',
-            name=f'Predicción {model_name}',
-            line=dict(color='red', dash='dash')
-        ))
-        
-        # Intervalos de confianza si están disponibles
-        if f'{model_name}-lo-95' in forecasts_ci_filtered.columns:
-            fig.add_trace(go.Scatter(
-                x=forecasts_ci_filtered['ds'],
-                y=forecasts_ci_filtered[f'{model_name}-hi-95'],
-                mode='lines',
-                line=dict(width=0),
-                showlegend=False,
-                hoverinfo='skip'
-            ))
-            
-            fig.add_trace(go.Scatter(
-                x=forecasts_ci_filtered['ds'],
-                y=forecasts_ci_filtered[f'{model_name}-lo-95'],
-                mode='lines',
-                line=dict(width=0),
-                fillcolor='rgba(255,0,0,0.2)',
-                fill='tonexty',
-                name='IC 95%',
-                hoverinfo='skip'
-            ))
-    
-    # Configurar diseño
+    fig.add_trace(go.Scatter(
+        x=forecast_data['ds'], y=forecast_data[f'{model_name}-lo-95'],
+        fill='tonexty', fillcolor='rgba(255, 127, 14, 0.2)',
+        mode='lines', line=dict(width=0), name='IC 95%', hoverinfo='skip'
+    ))
+
     fig.update_layout(
-        title=f'Predicción para {unique_id} - Modelo: {model_name}',
-        xaxis_title='Fecha',
-        yaxis_title='Valor',
-        hovermode='x unified',
-        height=500
+        title=f'Predicción para "{unique_id}" con {model_name}',
+        xaxis_title='Fecha', yaxis_title='Valor', hovermode='x unified', height=500,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
-    
     return fig
 
-# Interfaz principal
-def main():
-    # Opción para cargar datos
-    data_option = st.sidebar.radio(
-        "Fuente de datos:",
-        ["Usar datos de ejemplo", "Cargar archivo CSV"]
-    )
+# --- APLICACIÓN PRINCIPAL ---
+st.title("📈 Predictor de Series de Tiempo con Nixtla")
+st.markdown("Una aplicación para generar y visualizar predicciones usando `StatsForecast` de forma eficiente.")
+
+# Inicializar Session State
+if 'forecast_df' not in st.session_state:
+    st.session_state.forecast_df = None
+if 'df_prepared' not in st.session_state:
+    st.session_state.df_prepared = None
+
+# --- SIDEBAR DE CONFIGURACIÓN ---
+with st.sidebar:
+    st.header("⚙️ 1. Cargar Datos")
+    data_option = st.radio("Fuente de datos:", ["Usar datos de ejemplo", "Cargar archivo CSV"], key="data_source")
     
     df = None
-    
     if data_option == "Usar datos de ejemplo":
         df = generate_sample_data()
-        st.sidebar.success("Datos de ejemplo cargados")
-        
     else:
-        uploaded_file = st.sidebar.file_uploader(
-            "Cargar archivo CSV",
-            type=['csv'],
-            help="El archivo debe tener columnas: 'ds' (fechas) y 'y' (valores)"
-        )
-        
-        if uploaded_file is not None:
-            try:
-                df = pd.read_csv(uploaded_file)
-                st.sidebar.success("Archivo cargado exitosamente")
-            except Exception as e:
-                st.sidebar.error(f"Error al cargar archivo: {str(e)}")
+        uploaded_file = st.file_uploader("Cargar CSV", type=['csv'])
+        if uploaded_file:
+            df = pd.read_csv(uploaded_file)
     
     if df is not None:
-        # Preparar datos
-        df_prepared = prepare_data(df)
-        
-        if df_prepared is not None:
-            # Mostrar información de los datos
-            st.subheader("📊 Información de los Datos")
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric("Número de observaciones", len(df_prepared))
-            with col2:
-                st.metric("Fecha inicial", df_prepared['ds'].min().strftime('%Y-%m-%d'))
-            with col3:
-                st.metric("Fecha final", df_prepared['ds'].max().strftime('%Y-%m-%d'))
-            
-            # Mostrar vista previa de datos
-            with st.expander("Vista previa de los datos"):
-                st.dataframe(df_prepared.head(10))
-            
-            # Configuración de predicción
-            st.subheader("🔮 Configuración de Predicción")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                horizon = st.number_input('Horizonte de predicción (semanas)', 
-                                          min_value=1, value=12, 
-                                          step=1)
-                #horizon = st.slider(
-                    #"Horizonte de predicción (días)",
-                    #min_value=1,
-                    #max_value=365,
-                    #value=30
-                #)
-            
-            with col2:
-                models_available = ['AutoARIMA', 'AutoETS', 'SeasonalNaive']
-                models_selected = st.multiselect(
-                    "Seleccionar modelos",
-                    models_available,
-                    default=['AutoARIMA']
-                )
-            
-            # Botón para generar predicciones
-            if st.button("🚀 Generar Predicciones", type="primary"):
-                if not models_selected:
-                    st.error("Selecciona al menos un modelo")
-                else:
-                    with st.spinner("Generando predicciones..."):
-                        forecasts, forecasts_ci, sf = create_forecast(
-                            df_prepared, horizon, models_selected
-                        )
-                        
-                        if forecasts is not None:
-                            st.success("Predicciones generadas exitosamente!")
-                            
-                            # Obtener series únicas
-                            unique_ids = df_prepared['unique_id'].unique()
-                            
-                            # Crear tabs para cada serie
-                            if len(unique_ids) == 1:
-                                unique_id = unique_ids[0]
-                                
-                                # Crear tabs para cada modelo
-                                tabs = st.tabs(models_selected)
-                                
-                                for i, model_name in enumerate(models_selected):
-                                    with tabs[i]:
-                                        fig = create_forecast_plot(
-                                            df_prepared, forecasts, forecasts_ci, 
-                                            unique_id, model_name
-                                        )
-                                        st.plotly_chart(fig, use_container_width=True)
-                                        
-                                        # Mostrar métricas de la predicción
-                                        col1, col2 = st.columns(2)
-                                        with col1:
-                                            forecast_mean = forecasts[forecasts['unique_id'] == unique_id][model_name].mean()
-                                            st.metric("Promedio de predicción", f"{forecast_mean:.2f}")
-                                        with col2:
-                                            forecast_std = forecasts[forecasts['unique_id'] == unique_id][model_name].std()
-                                            st.metric("Desviación estándar", f"{forecast_std:.2f}")
-                            
-                            else:
-                                # Para múltiples series, crear selectbox
-                                selected_series = st.selectbox(
-                                    "Seleccionar serie:",
-                                    unique_ids
-                                )
-                                
-                                tabs = st.tabs(models_selected)
-                                
-                                for i, model_name in enumerate(models_selected):
-                                    with tabs[i]:
-                                        fig = create_forecast_plot(
-                                            df_prepared, forecasts, forecasts_ci, 
-                                            selected_series, model_name
-                                        )
-                                        st.plotly_chart(fig, use_container_width=True)
-                            
-                            # Opción para descargar predicciones
-                            st.subheader("📥 Descargar Resultados")
-                            csv = forecasts.to_csv(index=False)
-                            st.download_button(
-                                label="Descargar predicciones CSV",
-                                data=csv,
-                                file_name=f"predicciones_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                                mime="text/csv"
-                            )
+        st.session_state.df_prepared = prepare_data(df)
+        st.success("Datos listos para procesar.")
 
-if __name__ == "__main__":
-    main()
+# --- CUERPO PRINCIPAL ---
+if st.session_state.df_prepared is not None:
+    df_prepared = st.session_state.df_prepared
+    
+    st.header("📊 Resumen de Datos")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Observaciones", len(df_prepared))
+    col2.metric("Fecha Inicial", df_prepared['ds'].min().strftime('%Y-%m-%d'))
+    col3.metric("Fecha Final", df_prepared['ds'].max().strftime('%Y-%m-%d'))
+    with st.expander("Ver vista previa de los datos"):
+        st.dataframe(df_prepared.head())
+
+    st.header("🔮 2. Configurar Predicción")
+    
+    # Configuración en columnas
+    config_col1, config_col2, config_col3 = st.columns(3)
+    with config_col1:
+        horizon = st.number_input('Horizonte de predicción', min_value=1, value=30, step=1)
+    with config_col2:
+        freq_map = {'Diaria': 'D', 'Semanal': 'W', 'Mensual': 'M'}
+        freq_key = st.selectbox("Frecuencia de datos:", list(freq_map.keys()), index=0)
+        freq = freq_map[freq_key]
+    with config_col3:
+        season_map = {'D': 365, 'W': 52, 'M': 12}
+        season_length = season_map.get(freq, 1)
+        st.info(f"Estacionalidad inferida: `{season_length}`")
+
+    models_available = ['AutoARIMA', 'AutoETS', 'SeasonalNaive']
+    models_selected = st.multiselect("Seleccionar modelos a comparar:", models_available, default=['AutoARIMA', 'SeasonalNaive'])
+
+    if st.button("🚀 Generar Predicciones", type="primary", use_container_width=True):
+        if not models_selected:
+            st.error("Por favor, selecciona al menos un modelo.")
+        else:
+            with st.spinner("Entrenando modelos y generando predicciones... ¡Esto puede tardar un momento!"):
+                st.session_state.forecast_df = run_forecast(df_prepared, models_selected, horizon, freq, season_length)
+                st.success("¡Predicciones generadas y guardadas en la sesión!")
+
+    # --- 3. MOSTRAR RESULTADOS (SI EXISTEN EN SESSION STATE) ---
+    if st.session_state.forecast_df is not None:
+        st.header("📈 3. Visualizar Resultados")
+        forecasts = st.session_state.forecast_df
+        
+        unique_ids = df_prepared['unique_id'].unique()
+        selected_id = unique_ids[0]
+        if len(unique_ids) > 1:
+            selected_id = st.selectbox("Selecciona una serie para visualizar:", unique_ids)
+        
+        tabs = st.tabs([f"📊 {model}" for model in models_selected])
+        for i, model_name in enumerate(models_selected):
+            with tabs[i]:
+                fig = create_forecast_plot(df_prepared, forecasts, selected_id, model_name)
+                st.plotly_chart(fig, use_container_width=True)
+
+        st.subheader("📥 Descargar Resultados")
+        csv = forecasts.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="Descargar predicciones como CSV",
+            data=csv,
+            file_name=f"predicciones_{selected_id}_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+        )
+else:
+    st.info("Carga datos desde la barra lateral para comenzar.")
