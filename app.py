@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 # --- NUEVAS IMPORTACIONES ---
-from statsforecast import Forecast
 from statsforecast.models import AutoARIMA, AutoETS, SeasonalNaive, Theta
 from neuralforecast.models import NHITS
 from datetime import datetime
