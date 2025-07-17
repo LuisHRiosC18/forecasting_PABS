@@ -120,7 +120,7 @@ with st.sidebar:
     elif data_option == "Cargar desde GitHub":
         github_url = st.text_input(
             "URL del archivo CSV 'raw' en GitHub",
-            "https://raw.githubusercontent.com/Nixtla/transfer-learning-time-series/main/data/air-passengers.csv"
+            "https://raw.githubusercontent.com/LuisHRiosC18/forecasting_PABS/refs/heads/main/data_forecast/data_semanal.csv"
         )
         if github_url:
             df = load_github_data(github_url)
