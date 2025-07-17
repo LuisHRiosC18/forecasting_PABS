@@ -59,7 +59,7 @@ def run_forecast(_df, models_selected, horizon, freq, season_length):
         'AutoETS': AutoETS(),
         'SeasonalNaive': SeasonalNaive(season_length=season_length),
         'Theta': Theta(),
-        'NHITS': NHITS(h=horizon, input_size=2 * horizon, loss=MAE(), max_epochs=50)
+        'NHITS': NHITS(h=horizon, input_size=2 * horizon, loss=MAE(), max_steps=50)
     }
 
     all_forecasts = []
