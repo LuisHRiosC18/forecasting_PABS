@@ -157,7 +157,7 @@ def display_aggregate_summary(forecast_df, models_selected):
 
 # --- APLICACIÓN PRINCIPAL ---
 st.title("🚀 Pronósticos de Ingresos")
-st.markdown("Carga tus datos, selecciona modelos y visualiza el futuro 🔥🔥🔥🔥🔥🔥.")
+st.markdown("Carga tus datos, selecciona modelos y visualiza el futuro 🔥🔥🔥🔥🔥🔥 (cositas se vienen).")
 
 if 'forecast_df' not in st.session_state:
     st.session_state.forecast_df = None
