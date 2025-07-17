@@ -107,7 +107,7 @@ with st.sidebar:
     # AÑADIDA OPCIÓN DE GITHUB
     data_option = st.radio(
         "Fuente de datos:",
-        ["Usar datos de ejemplo", "Cargar archivo CSV", "Cargar desde GitHub"],
+        ["Cargar desde GitHub","Cargar archivo CSV", "Usar datos de ejemplo"],
         key="data_source", horizontal=True
     )
     
