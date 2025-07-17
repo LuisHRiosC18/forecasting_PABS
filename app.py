@@ -2,17 +2,17 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-from statsforecast import StatsForecast
-from datetime import datetime
+# --- NUEVAS IMPORTACIONES ---
 from statsforecast import StatsForecast, Forecast # Forecast para unificar
 from statsforecast.models import AutoARIMA, AutoETS, SeasonalNaive, Theta # Theta añadido
 from neuralforecast.models import NHITS # Modelo de Deep Learning
+from datetime import datetime
 import warnings
 
 warnings.filterwarnings('ignore')
 
 # --- Configuración de Página ---
-st.set_page_config(page_title= "Pronósticos PABS", page_icon="🚀", layout="wide")
+st.set_page_config(page_title="Dashboard de Pronósticos", page_icon="🚀", layout="wide")
 
 # --- Funciones de Carga y Preparación ---
 def generate_sample_data():
@@ -64,7 +64,7 @@ def run_forecast(_df, models_selected, horizon, freq, season_length):
     forecasts = sf.predict(df=_df, h=horizon, level=[95])
     return forecasts.reset_index()
 
-# Función para el indicador KPI
+# NUEVA FUNCIÓN para el indicador KPI
 def display_growth_indicator(hist_df, forecast_df, model_name):
     """Calcula y muestra un KPI de crecimiento/decrecimiento para la siguiente semana."""
     last_known_value = hist_df['y'].iloc[-1]
@@ -105,7 +105,7 @@ def create_forecast_plot(df_hist, forecasts_df, unique_id, model_name):
     )
     return fig
 
-#Agregar un resumen
+# --- NUEVA FUNCIÓN DE RESUMEN ---
 def display_aggregate_summary(forecast_df, models_selected):
     st.subheader("Consenso de Modelos (Próxima Semana)")
     first_step_forecast = forecast_df.iloc[0]
@@ -134,7 +134,7 @@ with st.sidebar:
     # AÑADIDA OPCIÓN DE GITHUB
     data_option = st.radio(
         "Fuente de datos:",
-        ["Ecobro 2025","Cargar archivo CSV", "Usar datos de ejemplo"],
+        ["Usar datos de ejemplo", "Cargar archivo CSV", "Cargar desde GitHub"],
         key="data_source", horizontal=True
     )
     
@@ -146,10 +146,10 @@ with st.sidebar:
         if uploaded_file:
             df = pd.read_csv(uploaded_file)
     # LÓGICA PARA CARGAR DESDE GITHUB
-    elif data_option == "Ecobro 2025":
+    elif data_option == "Cargar desde GitHub":
         github_url = st.text_input(
             "URL del archivo CSV 'raw' en GitHub",
-            "https://raw.githubusercontent.com/LuisHRiosC18/forecasting_PABS/refs/heads/main/data_forecast/data_semanal.csv" # URL de ejemplo
+            "https://raw.githubusercontent.com/Nixtla/transfer-learning-time-series/main/data/air-passengers.csv" # URL de ejemplo
         )
         if github_url:
             df = load_github_data(github_url)
@@ -160,27 +160,7 @@ with st.sidebar:
             st.success("Datos cargados y listos.")
     
     # Mover configuración de predicción a la sidebar para una UI más limpia
-    if st.session_state.df_prepared is not None:
-        st.header("🔮 2. Configurar Predicción")
-        horizon = st.slider('Horizonte de predicción (semanas)', min_value=1, max_value=52, value=12)
-        freq = 'W' # Frecuencia semanal por defecto para este caso de negocio
-        season_length = 52
-        
-        models_available = ['AutoARIMA', 'AutoETS', 'SeasonalNaive']
-        models_selected = st.multiselect("Seleccionar modelos:", models_available, default=['AutoARIMA', 'SeasonalNaive'])
-
-        if st.button("🚀 Generar Predicciones", type="primary", use_container_width=True):
-            if not models_selected:
-                st.error("Por favor, selecciona al menos un modelo.")
-            else:
-                with st.spinner("Entrenando modelos y generando predicciones..."):
-                    st.session_state.forecast_df = run_forecast(
-                        st.session_state.df_prepared, models_selected, horizon, freq, season_length
-                    )
-                    st.success("¡Pronósticos listos!")
-
-
-if st.session_state.df_prepared is not None:
+   if st.session_state.df_prepared is not None:
         st.header("🔮 2. Configurar Predicción")
         horizon = st.slider('Horizonte de predicción (semanas)', min_value=1, max_value=52, value=12)
         freq, season_length = 'W', 52
@@ -201,19 +181,34 @@ if st.session_state.df_prepared is not None:
                     )
                     st.success("¡Pronósticos listos!")
 
+
 if st.session_state.df_prepared is not None:
     if st.session_state.forecast_df is not None:
         st.header("📊 3. Visualizar Resultados")
         forecasts = st.session_state.forecast_df
         df_prepared = st.session_state.df_prepared
-        # ... (lógica de selectbox para series sin cambios) ...
+
+        unique_ids = df_prepared['unique_id'].unique()
+        selected_id = unique_ids[0]
+        if len(unique_ids) > 1:
+            selected_id = st.selectbox("Selecciona una serie para visualizar:", unique_ids)
         
         tabs = st.tabs([f"📈 {model}" for model in models_selected])
         
         for i, model_name in enumerate(models_selected):
             with tabs[i]:
-                # ... (display_growth_indicator y create_forecast_plot se llaman igual) ...
+                # SE LLAMA A LA NUEVA FUNCIÓN KPI AQUÍ
+                kpi_col, chart_col = st.columns([1, 3])
+                with kpi_col:
+                    display_growth_indicator(
+                        df_prepared[df_prepared['unique_id'] == selected_id],
+                        forecasts[forecasts['unique_id'] == selected_id],
+                        model_name
+                    )
 
+                with chart_col:
+                    fig = create_forecast_plot(df_prepared, forecasts, selected_id, model_name)
+                    st.plotly_chart(fig, use_container_width=True)
         st.divider() # Separador visual
 
         # LLAMADA A LA NUEVA FUNCIÓN DE RESUMEN
@@ -222,6 +217,7 @@ if st.session_state.df_prepared is not None:
 
         st.divider()
 
+        
         st.subheader("📥 Descargar Resultados")
         csv = forecasts.to_csv(index=False).encode('utf-8')
         st.download_button(
