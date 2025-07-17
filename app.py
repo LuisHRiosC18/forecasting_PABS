@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 # --- NUEVAS IMPORTACIONES ---
 from statsforecast.models import AutoARIMA, AutoETS, SeasonalNaive, Theta
 from neuralforecast.models import NHITS
+from neuralforecast.losses.pytorch import MAE 
 from datetime import datetime
 import warnings
 
@@ -44,16 +45,25 @@ def prepare_data(df):
 @st.cache_data
 def run_forecast(_df, models_selected, horizon, freq, season_length):
     """Función de predicción actualizada para soportar más modelos."""
+    
+    # Importante: Corregir el nombre de la clase principal
+    # El código original usaba 'Forecast', pero la librería se llama 'StatsForecast'
+    
     model_map = {
         'AutoARIMA': AutoARIMA(),
         'AutoETS': AutoETS(),
         'SeasonalNaive': SeasonalNaive(season_length=season_length),
         'Theta': Theta(),
-        'NHITS': NHITS(h=horizon, input_size=2 * horizon, loss='mae', max_epochs=50)
+        'NHITS': NHITS(h=horizon, input_size=2 * horizon, loss=MAE(), max_epochs=50) 
     }
     models = [model_map[model] for model in models_selected]
-    sf = Forecast(models=models, freq=freq)
-    forecasts = sf.predict(df=_df, h=horizon, level=[95])
+    
+    # Corregir el nombre de la clase aquí también
+    sf = StatsForecast(models=models, freq=freq)
+    
+    # El método se llama 'forecast', no 'predict'
+    forecasts = sf.forecast(df=_df, h=horizon, level=[95])
+    
     return forecasts.reset_index()
 
 def display_growth_indicator(hist_df, forecast_df, model_name):
