@@ -4,6 +4,7 @@ import numpy as np
 import plotly.graph_objects as go
 # --- NUEVAS IMPORTACIONES ---
 from statsforecast import StatsForecast
+from neuralforecast import NeuralForecast 
 from statsforecast.models import AutoARIMA, AutoETS, SeasonalNaive, Theta
 from neuralforecast.models import NHITS
 from neuralforecast.losses.pytorch import MAE 
@@ -45,27 +46,54 @@ def prepare_data(df):
 # --- Funciones de Modelo y Visualización ---
 @st.cache_data
 def run_forecast(_df, models_selected, horizon, freq, season_length):
-    """Función de predicción actualizada para soportar más modelos."""
-    
-    # Importante: Corregir el nombre de la clase principal
-    # El código original usaba 'Forecast', pero la librería se llama 'StatsForecast'
+    """
+    Función de predicción que maneja modelos de statsforecast y neuralforecast por separado
+    y luego combina sus resultados.
+    """
+    # 1. Separar los modelos por tipo de librería
+    stats_models_selected = [m for m in models_selected if m in ['AutoARIMA', 'AutoETS', 'SeasonalNaive', 'Theta']]
+    neural_models_selected = [m for m in models_selected if m in ['NHITS']] # Puedes añadir más modelos neuronales aquí
     
     model_map = {
         'AutoARIMA': AutoARIMA(),
         'AutoETS': AutoETS(),
         'SeasonalNaive': SeasonalNaive(season_length=season_length),
         'Theta': Theta(),
-        'NHITS': NHITS(h=horizon, input_size=2 * horizon, loss=MAE(), max_steps=50) 
+        'NHITS': NHITS(h=horizon, input_size=2 * horizon, loss=MAE(), max_epochs=50)
     }
-    models = [model_map[model] for model in models_selected]
+
+    all_forecasts = []
+
+    # 2. Ejecutar modelos estadísticos si se seleccionó alguno
+    if stats_models_selected:
+        stats_models = [model_map[m] for m in stats_models_selected]
+        sf = StatsForecast(models=stats_models, freq=freq, n_jobs=-1)
+        stats_forecasts_df = sf.forecast(df=_df, h=horizon, level=[95])
+        all_forecasts.append(stats_forecasts_df)
+
+    # 3. Ejecutar modelos neuronales si se seleccionó alguno
+    if neural_models_selected:
+        neural_models = [model_map[m] for m in neural_models_selected]
+        # Nota: NeuralForecast no soporta el parámetro 'level' directamente en predict
+        # Los intervalos de confianza se manejan de forma diferente o se calculan a posteriori.
+        # Por simplicidad, aquí solo generamos la predicción puntual.
+        nf = NeuralForecast(models=neural_models, freq=freq)
+        neural_forecasts_df = nf.predict(df=_df)
+        all_forecasts.append(neural_forecasts_df)
     
-    # Corregir el nombre de la clase aquí también
-    sf = StatsForecast(models=models, freq=freq)
+    # 4. Combinar los resultados
+    if not all_forecasts:
+        return pd.DataFrame() # Retorna un DF vacío si no se seleccionó ningún modelo
+
+    # Empezamos con el primer dataframe de la lista
+    final_forecasts_df = all_forecasts[0]
     
-    # El método se llama 'forecast', no 'predict'
-    forecasts = sf.forecast(df=_df, h=horizon, level=[95])
-    
-    return forecasts.reset_index()
+    # Si hay más dataframes, los unimos
+    if len(all_forecasts) > 1:
+        for next_df in all_forecasts[1:]:
+            final_forecasts_df = pd.merge(final_forecasts_df, next_df, on=['unique_id', 'ds'], how='outer')
+
+    return final_forecasts_df.reset_index()
 
 def display_growth_indicator(hist_df, forecast_df, model_name):
     """Calcula y muestra un KPI de crecimiento/decrecimiento para la siguiente semana."""
