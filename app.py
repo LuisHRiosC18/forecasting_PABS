@@ -178,7 +178,7 @@ with st.sidebar:
         uploaded_file = st.file_uploader("Cargar CSV", type=['csv'])
         if uploaded_file:
             df = pd.read_csv(uploaded_file)
-    elif data_option == "Cargar desde GitHub":
+    elif data_option == "Ecobro":
         github_url = st.text_input(
             "URL del archivo CSV 'raw' en GitHub",
             "https://raw.githubusercontent.com/LuisHRiosC18/forecasting_PABS/refs/heads/main/data_forecast/data_semanal.csv"
