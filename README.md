@@ -11,8 +11,13 @@ Aplicación web desarrollada con Streamlit para generar y visualizar prediccione
 - 🎨 Interfaz intuitiva y responsiva
 
 ## Instalación
+Venga ya, pero como se puede ser tan guarrindonga.
+Culisputis 
 
 1. Clonar el repositorio:
 ```bash
 git clone https://github.com/tu-usuario/forecasting-app.git
 cd forecasting-app
+
+
+## Culisputis
